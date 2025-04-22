@@ -1,0 +1,57 @@
+version: '3.7'
+
+services:
+    ############### Kafka ###############
+    zookeeper:
+        image: bitnami/zookeeper:latest
+        restart: always
+        networks:
+            - default
+        ports:
+            - 2181:2181
+        environment:
+            - ALLOW_ANONYMOUS_LOGIN=yes
+    kafka:
+        image: bitnami/kafka:latest
+        restart: always
+        networks:
+            - default
+        ports:
+            - 9092:9092
+            - 9093:9093
+        environment:
+            - KAFKA_BROKER_ID=0
+            - KAFKA_LISTENERS=PLAINTEXT://:9092,EXTERNAL://:9093
+            - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9093
+            - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+            - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+            - ALLOW_PLAINTEXT_LISTENER=yes
+        volumes:
+            - kafka:/data/kafka
+        depends_on:
+            - zookeeper
+
+    ############### RabbitMQ ###############
+    rabbitmq:
+        image: rabbitmq:3-management
+        restart: always
+        environment:
+            - RABBITMQ_DEFAULT_USER=guest
+            - RABBITMQ_DEFAULT_PASS=guest
+        ports:
+            - 5672:5672
+            - 15672:15672
+        volumes:
+            - rabbitmq:/data/rabbitmq
+        networks:
+            - default
+
+volumes:
+    kafka:
+        driver: local
+    rabbitmq:
+        driver: local
+
+networks:
+    default:
+        driver: bridge

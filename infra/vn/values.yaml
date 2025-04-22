@@ -1,0 +1,6 @@
+ingress:
+    hosts:
+        - host: ''
+configMap:
+    data:
+        env_file: ''

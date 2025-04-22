@@ -1,0 +1,177 @@
+name: Uptime Monitor Deployment
+
+on:
+  push:
+    branches:
+      [
+        master,
+        'release/v*.*.*-alpha',
+        'release/v*.*.*-beta',
+        'release/v*.*.*-rc',
+        'release/v*.*.*-patch',
+        'hotfix/v*.*.*-alpha-*',
+        'hotfix/v*.*.*-beta-*',
+        'hotfix/v*.*.*-rc-*',
+        'hotfix/v*.*.*-patch-*'
+      ]
+    tags:
+      [
+        'v*.*.*-alpha',
+        'v*.*.*-beta',
+        'v*.*.*-rc',
+        'v*.*.*-patch',
+        'v*.*.*-alpha.hotfix.*',
+        'v*.*.*-beta.hotfix.*',
+        'v*.*.*-rc.hotfix.*',
+        'v*.*.*-patch.hotfix.*'
+      ]
+  workflow_dispatch:
+    inputs:
+      countries:
+        description: "A JSON array of countries"
+        type: string
+        required: false
+        default: '["vn", "us"]'
+      environments:
+        description: "A JSON array of environments"
+        type: string
+        required: false
+        default: '["staging", "preprod", "production"]'
+
+jobs:
+  determine-env:
+    name: Determine environment (caller)
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: atomatiz/common-workflows/.github/workflows/oci-cross-determine-environment.yml@v1.0
+    with:
+      countries: ${{ github.event.inputs.countries || '["vn", "us"]' }}
+      environments: ${{ github.event.inputs.environments || '["staging", "preprod", "production"]' }}
+
+  extract-configs:
+    name: Extract configuration
+    needs: [determine-env]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      unique_countries: ${{ steps.set-outputs.outputs.unique_countries }}
+      env_types: ${{ steps.set-outputs.outputs.env_types }}
+      single_env_type: ${{ steps.set-outputs.outputs.single_env_type }}
+    steps:
+      - name: Extract Configs
+        id: set-outputs
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          UNIQUE_COUNTRIES=$(echo '${{ needs.determine-env.outputs.env_configs }}' | jq -c '[.[].country] | unique')
+          ENV_TYPES=$(echo '${{ needs.determine-env.outputs.env_configs }}' | jq -c '[.[].env_type] | unique')
+          SINGLE_ENV_TYPE=$(echo '${{ needs.determine-env.outputs.env_configs }}' | jq -r '.[0].env_type')
+          echo "unique_countries=$UNIQUE_COUNTRIES" >> $GITHUB_OUTPUT
+          echo "env_types=$ENV_TYPES" >> $GITHUB_OUTPUT
+          echo "single_env_type=$SINGLE_ENV_TYPE" >> $GITHUB_OUTPUT
+
+  matrix-country-job:
+    name: Determine country for helm build
+    needs: [extract-configs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      matrix:
+        country: ${{ fromJson(needs.extract-configs.outputs.unique_countries) }}
+    outputs:
+      vn_triggered: ${{ steps.set-outputs.outputs.vn_triggered }}
+      us_triggered: ${{ steps.set-outputs.outputs.us_triggered }}
+    steps:
+      - name: Set Outputs
+        id: set-outputs
+        run: |
+          if [ "${{ matrix.country }}" = "vn" ]; then
+            echo "vn_triggered=true" >> $GITHUB_OUTPUT
+          fi
+          if [ "${{ matrix.country }}" = "us" ]; then
+            echo "us_triggered=true" >> $GITHUB_OUTPUT
+          fi
+
+  build-helm-values-vn:
+    name: Build helm values for VN (caller)
+    needs: [determine-env, extract-configs, matrix-country-job]
+    if: ${{ needs.matrix-country-job.outputs.vn_triggered == 'true' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/build-helm-values.yml
+    secrets: inherit
+    with:
+      country: vn
+      github_sha: ${{ github.sha }}
+      env_configs: ${{ needs.determine-env.outputs.env_configs }}
+      env_types: ${{ needs.extract-configs.outputs.env_types }}
+
+  build-helm-values-us:
+    name: Build helm values for US (caller)
+    needs: [determine-env, extract-configs, matrix-country-job]
+    if: ${{ needs.matrix-country-job.outputs.us_triggered == 'true' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/build-helm-values.yml
+    secrets: inherit
+    with:
+      country: us
+      github_sha: ${{ github.sha }}
+      env_configs: ${{ needs.determine-env.outputs.env_configs }}
+      env_types: ${{ needs.extract-configs.outputs.env_types }}
+
+  build:
+    name: Build application (caller)
+    needs: [extract-configs, matrix-country-job]
+    uses: atomatiz/common-workflows/.github/workflows/oci-cross-build.yml@v1.0
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      environment: ${{ needs.extract-configs.outputs.single_env_type }}
+      language: nodejs
+      node_version: 22.12.0
+      build_command: yarn build
+      install_global_deps: '@nestjs/cli'
+      install_sentry: true
+      dockerfile_path: infra/Dockerfile
+      build_environment: build
+
+  deploy:
+    name: Deploy application (caller)
+    needs: [determine-env, build-helm-values-vn, build-helm-values-us, build]
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        env_config: ${{ fromJson(needs.determine-env.outputs.env_configs) }}
+    uses: atomatiz/common-workflows/.github/workflows/oci-cross-deploy.yml@v1.0
+    secrets: inherit
+    with:
+      environment: ${{ matrix.env_config.env_type }}
+      country: ${{ matrix.env_config.country }}
+      app_name: uptime-monitor
+      namespace: uptime-monitor
+      create_namespace: true
+      update_helm_dependencies: true
+      helm_chart_path: infra
+      helm_values: ${{ matrix.env_config.country == 'vn' && matrix.env_config.env_type == 'staging' && needs.build-helm-values-vn.outputs.helm_values_staging ||
+                      matrix.env_config.country == 'vn' && matrix.env_config.env_type == 'preprod' && needs.build-helm-values-vn.outputs.helm_values_preprod ||
+                      matrix.env_config.country == 'vn' && matrix.env_config.env_type == 'production' && needs.build-helm-values-vn.outputs.helm_values_production ||
+                      matrix.env_config.country == 'us' && matrix.env_config.env_type == 'staging' && needs.build-helm-values-us.outputs.helm_values_staging ||
+                      matrix.env_config.country == 'us' && matrix.env_config.env_type == 'preprod' && needs.build-helm-values-us.outputs.helm_values_preprod ||
+                      matrix.env_config.country == 'us' && matrix.env_config.env_type == 'production' && needs.build-helm-values-us.outputs.helm_values_production }}
+      use_hcp_vault: true
+      create_secrets: true
+      configure_ssl_issuer: true
+      check_certificate: true
+      decode_helm_values: true

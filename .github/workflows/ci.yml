@@ -1,0 +1,45 @@
+name: CI Workflow
+
+on:
+  push:
+    tags:
+      [      
+        'v*.*.*-alpha',
+        'v*.*.*-beta',
+        'v*.*.*-rc',
+        'v*.*.*-patch',
+        'v*.*.*-alpha.hotfix.*',
+        'v*.*.*-beta.hotfix.*',
+        'v*.*.*-rc.hotfix.*',
+        'v*.*.*-patch.hotfix.*'
+      ]
+  pull_request:
+    branches:
+      [
+        'dev',
+        'master',
+        'release/v*.*.*-alpha',
+        'release/v*.*.*-beta',
+        'release/v*.*.*-rc',
+        'release/v*.*.*-patch',
+        'hotfix/v*.*.*-alpha-*',
+        'hotfix/v*.*.*-beta-*',
+        'hotfix/v*.*.*-rc-*',
+        'hotfix/v*.*.*-patch-*'
+      ]
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: atomatiz/common-workflows/.github/workflows/oci-cross-ci.yml@v1.0
+    secrets: inherit
+    with:
+      language: nodejs
+      ci_environment: test
+      node_version: 22.12.0
+      lint_command: yarn lint-staged
+      test_command: yarn test:cov
+      artifact_path: coverage/

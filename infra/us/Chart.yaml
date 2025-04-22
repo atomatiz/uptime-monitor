@@ -1,0 +1,9 @@
+apiVersion: v2
+name: uptime-monitor-us
+description: Uptime Monitor for United States
+type: application
+version: 0.1.0
+dependencies:
+    - name: uptime-monitor-common
+      version: '0.1.0'
+      repository: 'file://../common'

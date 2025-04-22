@@ -1,0 +1,5 @@
+apiVersion: v2
+name: uptime-monitor-common
+description: Base Helm chart for Uptime Monitor
+type: application
+version: 0.1.0

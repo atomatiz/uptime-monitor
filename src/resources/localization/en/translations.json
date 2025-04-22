@@ -1,0 +1,19 @@
+{
+    "website_up": {
+        "line1": "The website {{url}} is back online.",
+        "line2": "It was down for approximately {{totalDowntime}}."
+    },
+    "website_down": {
+        "line1": "The website {{url}} is currently down.",
+        "line2": "It has been unavailable since {{lastDownTime}}."
+    },
+    "host_restarted": {
+        "line1": "The host {{instanceId}} of website {{url}} is restarted.",
+        "line2": "Timestamp: {{updatedAt}}."
+    },
+    "host_manual_intervention": {
+        "line1": "The host {{instanceId}} requires manual intervention.",
+        "line2": "It has exceeded {{maxRestartAttempts}} restart attempts.",
+        "line3": "The website {{websiteUrl}} remains down as of {{updatedAt}}."
+    }
+}

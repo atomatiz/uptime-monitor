@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace | default "uptime-monitor" }}
+  annotations:
+    rollme: {{ randAlphaNum 5 | quote }}
+spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: {{ .Release.Name }}-secret
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          env:
+          {{- range .Values.env }}
+          - name: {{ .name }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ $.Release.Name }}-secrets
+                key: {{ .secretKey }}
+          {{- end }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.service.targetPort | default 8001 }}
+          volumeMounts:
+            - name: {{ .Release.Name }}-config-volume
+              mountPath: "/app/.env.{{ .Values.env_type }}"
+              subPath: "env_{{ .Values.env_type }}"
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | quote }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu | default "500m" | quote }}
+              memory: {{ .Values.resources.limits.memory | default "512Mi" | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30 
+            periodSeconds: 60     
+            failureThreshold: 3  
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 20  
+            periodSeconds: 30   
+            failureThreshold: 3   
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10  
+            periodSeconds: 20     
+            failureThreshold: 15   
+            timeoutSeconds: 5
+      volumes:
+        - name: {{ .Release.Name }}-config-volume
+          configMap:
+            name: {{ .Release.Name }}-env-config

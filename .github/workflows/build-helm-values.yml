@@ -1,0 +1,108 @@
+name: Build Helm Values
+
+on:
+  workflow_call:
+    inputs:
+      country:
+        description: "Country code (e.g., vn, us)"
+        type: string
+        required: true
+      github_sha:
+        description: "GitHub SHA for the commit"
+        type: string
+        required: true
+      env_configs:
+        description: "JSON array of environment configurations"
+        type: string
+        required: true
+      env_types:
+        description: "JSON array of environment types to process"
+        type: string
+        required: true
+      host_image:
+        description: "Runner image"
+        type: string
+        required: false
+        default: "ubuntu-latest"
+    outputs:
+      helm_values_staging:
+        description: "Encoded Helm values for staging"
+        value: ${{ jobs.build-helm-values.outputs.helm_values_staging }}
+      helm_values_preprod:
+        description: "Encoded Helm values for preprod"
+        value: ${{ jobs.build-helm-values.outputs.helm_values_preprod }}
+      helm_values_production:
+        description: "Encoded Helm values for production"
+        value: ${{ jobs.build-helm-values.outputs.helm_values_production }}
+
+jobs:
+  build-helm-values:
+    name: Build helm values for ${{ matrix.env_type }} (${{ inputs.country }})
+    runs-on: ${{ inputs.host_image }}
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        env_type: ${{ fromJson(inputs.env_types) }}
+    environment:
+      name: ${{ matrix.env_type }}-${{ inputs.country }}
+    outputs:
+      helm_values_staging: ${{ steps.helm-values-staging.outputs.out }}
+      helm_values_preprod: ${{ steps.helm-values-preprod.outputs.out }}
+      helm_values_production: ${{ steps.helm-values-production.outputs.out }}
+    env:
+      ENV_TYPE: ${{ matrix.env_type }}
+      COUNTRY: ${{ inputs.country }}
+      HOST_IMAGE_REPOSITORY: ${{ secrets.HOST_IMAGE_REPOSITORY }}
+      HOSTNAME: ${{ secrets.HOSTNAME }}
+      RESOURCE_CPU_REQUEST: ${{ secrets.RESOURCE_CPU_REQUEST }}
+      RESOURCE_MEMORY_REQUEST: ${{ secrets.RESOURCE_MEMORY_REQUEST }}
+      YARN_TOKEN: ${{ secrets.YARN_TOKEN }}
+      ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+    steps:
+      - name: Set Helm Values
+        id: set-helm-values
+        run: |
+          HELM_VALUES=""
+          HELM_VALUES="$HELM_VALUES --set-file uptime-monitor-common.configMap.data.env_file=.env.${{ env.ENV_TYPE }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.env_type=${{ env.ENV_TYPE }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.image.tag=${{ inputs.github_sha }}-${{ env.ENV_TYPE }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.image.repository=${{ env.HOST_IMAGE_REPOSITORY }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.ingress.hosts[0].host=${{ env.HOSTNAME }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.ingress.enabled=true"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.ingress.tls.secretName=uptime-monitor-${{ env.ENV_TYPE }}-${{ env.COUNTRY }}-tls"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.resources.requests.cpu=${{ env.RESOURCE_CPU_REQUEST }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.resources.requests.memory=${{ env.RESOURCE_MEMORY_REQUEST }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.env[0].name=YARN_TOKEN"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.env[0].secretKey=yarnToken"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.env[1].name=DEPLOY_ENV"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.env[1].secretKey=deployEnv"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.secrets.yarnToken=${{ env.YARN_TOKEN }}"
+          HELM_VALUES="$HELM_VALUES --set uptime-monitor-common.secrets.deployEnv=${{ env.ENV_TYPE }}"
+          echo "helm_values=$HELM_VALUES" >> $GITHUB_OUTPUT
+      - name: Encode Helm Values (Staging)
+        if: ${{ matrix.env_type == 'staging' }}
+        uses: cloudposse/github-action-secret-outputs@0.1.2
+        id: helm-values-staging
+        with:
+          secret: ${{ env.ENCRYPTION_PASSWORD }}
+          op: encode
+          in: ${{ steps.set-helm-values.outputs.helm_values }}
+      - name: Encode Helm Values (Preprod)
+        if: ${{ matrix.env_type == 'preprod' }}
+        uses: cloudposse/github-action-secret-outputs@0.1.2
+        id: helm-values-preprod
+        with:
+          secret: ${{ env.ENCRYPTION_PASSWORD }}
+          op: encode
+          in: ${{ steps.set-helm-values.outputs.helm_values }}
+      - name: Encode Helm Values (Production)
+        if: ${{ matrix.env_type == 'production' }}
+        uses: cloudposse/github-action-secret-outputs@0.1.2
+        id: helm-values-production
+        with:
+          secret: ${{ env.ENCRYPTION_PASSWORD }}
+          op: encode
+          in: ${{ steps.set-helm-values.outputs.helm_values }}

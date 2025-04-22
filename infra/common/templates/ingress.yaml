@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  namespace: {{ .Release.Namespace | default "uptime-monitor" }}
+  labels:
+    app: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-cluster-issuer"
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    nginx.ingress.kubernetes.io/proxy-real-ip-cidr: "0.0.0.0/0"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+        real_ip_header X-Forwarded-For;
+        real_ip_recursive on;
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "{{ (index .Values.ingress.hosts 0).host }}"
+      secretName: {{ .Values.ingress.tls.secretName }}
+  rules:
+    - host: "{{ (index .Values.ingress.hosts 0).host }}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-service
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

@@ -1,0 +1,42 @@
+replicaCount: 1
+image:
+    repository: ''
+    tag: 'latest'
+service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 8001
+ingress:
+    enabled: true
+    hosts:
+        - host: ''
+          paths:
+              - path: /
+                pathType: Prefix
+    tls:
+        enabled: true
+        secretName: uptime-monitor-tls
+configMap:
+    data:
+        env_file: ''
+secrets:
+    yarnToken: ''
+    deployEnv: ''
+env_type: ''
+env:
+    - name: YARN_TOKEN
+      secretKey: yarnToken
+    - name: DEPLOY_ENV
+      secretKey: deployEnv
+hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+resources:
+    requests:
+        cpu: '100m'
+        memory: '128Mi'
+    limits:
+        cpu: '500m'
+        memory: '512Mi'

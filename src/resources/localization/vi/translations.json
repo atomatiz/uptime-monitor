@@ -1,0 +1,19 @@
+{
+    "website_up": {
+        "line1": "Trang web {{url}} đã hoạt động trở lại.",
+        "line2": "Nó đã ngừng hoạt động khoảng {{totalDowntime}}."
+    },
+    "website_down": {
+        "line1": "Trang web {{url}} hiện không hoạt động.",
+        "line2": "Nó đã không hoạt động kể từ {{lastDownTime}}."
+    },
+    "host_restarted": {
+        "line1": "Máy chủ {{instanceId}} của website {{url}} đã khởi động lại.",
+        "line2": "Thời điểm: {{updatedAt}}."
+    },
+    "host_manual_intervention": {
+        "line1": "Máy chủ {{instanceId}} cần can thiệp thủ công.",
+        "line2": "Nó đã vượt quá {{maxRestartAttempts}} lần thử khởi động lại.",
+        "line3": "Trang web {{websiteUrl}} vẫn không hoạt động tính đến {{updatedAt}}."
+    }
+}

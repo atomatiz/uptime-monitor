@@ -1,0 +1,20 @@
+{
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": ".",
+    "testEnvironment": "node",
+    "testRegex": ".e2e-spec.ts$",
+    "transform": {
+        "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+        "^@src/(.*)$": "<rootDir>/../src/$1",
+        "^@common/(.*)$": "<rootDir>/../src/common/$1",
+        "^@resources/(.*)$": "<rootDir>/../src/resources/$1",
+        "^@core/(.*)$": "<rootDir>/../src/core/$1",
+        "^@application/(.*)$": "<rootDir>/../src/application/$1",
+        "^@domain/(.*)$": "<rootDir>/../src/domain/$1",
+        "^@infrastructure/(.*)$": "<rootDir>/../src/infrastructure/$1",
+        "^@interfaces/(.*)$": "<rootDir>/../src/interfaces/$1",
+        "^@scheduling/(.*)$": "<rootDir>/../src/scheduling/$1"
+    }
+}
